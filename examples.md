@@ -206,24 +206,29 @@ List<OrderStatRow> countByStore(Long storeId, LocalDateTime from, LocalDateTime 
 **正例**
 
 ```java
+/** 费率配置（注入） */
+private FeeProperties feeProperties;
+
 /**
  * 按阶梯费率计算手续费。
  *
- * <p>阶梯规则：0-1 万 0.6%，1 万以上 0.5%；金额以分为单位避免浮点误差。
- * 公式来源：财务制度 2026 版 3.2 节。
+ * <p>费率与阶梯阈值由运营配置下发（配置 key：fee.tier.*），代码只实现分段累进；
+ * 金额以分为单位，避免浮点误差。
  */
 public long calcFeeCent(long amountCent) {
     // 前置：amountCent >= 0，由调用方校验
 
-    // 第一阶梯：1 万以内按 0.6% 计费
-    if (amountCent <= 1_000_000L) {
-        return amountCent * 6 / 1000;
+    // 第一档：未超过阈值部分按第一档费率计算（阈值单位：分，费率单位：千分之一）
+    long tier1LimitCent = feeProperties.getTier1LimitCent();
+    long tier1RatePpm = feeProperties.getTier1RatePpm();
+    if (amountCent <= tier1LimitCent) {
+        return amountCent * tier1RatePpm / 1000;
     }
 
-    // 第二阶梯：超出部分按 0.5% 计费，前 1 万仍按第一阶梯
-    long firstTier = 1_000_000L * 6 / 1000;
-    long rest = amountCent - 1_000_000L;
-    return firstTier + rest * 5 / 1000;
+    // 超出阈值部分按第二档费率累进，前段仍按第一档
+    long tier1FeeCent = tier1LimitCent * tier1RatePpm / 1000;
+    long restCent = amountCent - tier1LimitCent;
+    return tier1FeeCent + restCent * feeProperties.getTier2RatePpm() / 1000;
 }
 ```
 
@@ -240,4 +245,66 @@ public long calcFeeCent(long amountCent) {
 }
 ```
 
-问题：费率、阶梯阈值、金额单位、公式来源全部靠猜；变量命名 `a`、`b` 无意义；无前置条件说明，负数入参行为未定。
+问题：费率与阈值写死在代码里且无来源，金额单位与取整口径靠猜；变量命名 `a`、`b` 无意义；无前置条件说明，负数入参行为未定。
+
+## 8. 安全与保密
+
+**正例**
+
+```java
+/**
+ * 微信支付回调处理。
+ *
+ * <p>验签密钥由配置中心注入，不落代码与注释；幂等：同一交易号重复回调只处理一次。
+ */
+@PostMapping("/pay/notify")
+public String notify(@RequestBody String body) {
+}
+```
+
+**反例**
+
+```java
+/**
+ * 微信支付回调处理。
+ *
+ * <p>商户号 M10086，API v3 密钥 WXK-2f8a9c，生产回调地址 https://pay.intra.local/notify，
+ * 渠道费率 0.6%，T+1 结算。
+ */
+@PostMapping("/pay/notify")
+public String notify(@RequestBody String body) {
+}
+```
+
+问题：密钥、商户号、内部域名、费率与结算条款写进注释；注释会随代码进入仓库、评审、截图与外包交付，等同公开。业务依据只引编号，密钥由配置注入。
+
+## 9. 详略控制
+
+**正例**
+
+```java
+/**
+ * 校验版本记录入参并归一化设备清单。
+ *
+ * <p>全量升级时清空设备清单，避免残留清单混入全量记录；
+ * 置空串而非 null：updateById 的 {@code <if test="imei != null">} 会跳过 null。
+ */
+public void normalize(UpgradeVersionRecord record) {
+}
+```
+
+**反例**
+
+```java
+/**
+ * 校验版本记录入参并归一化设备清单。
+ *
+ * <p>全量升级必须清空设备清单：PC 端把升级类型切回全量后，表单里的 serialNumber
+ * 仍会带上残留值，落库会让「部分升级清单」出现在全量记录上造成语义混乱。
+ * 置空串而非 null — updateById 的 &lt;if test="imei != null"&gt; 会跳过 null，导致旧清单残留。
+ */
+public void normalize(UpgradeVersionRecord record) {
+}
+```
+
+问题：把前端操作路径与业务后果写成整段叙事，维护者需要的"哪里会踩坑"被淹没；操作路径与流程细节属需求文档，注释只留"清空设备清单"与"空串而非 null"两个维护必需的事实。
