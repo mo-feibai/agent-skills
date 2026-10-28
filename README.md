@@ -13,10 +13,16 @@ git clone https://github.com/mo-feibai/agent-skills.git
 Windows 下想保持单一份源码，用目录联接而不是复制：
 
 ```bat
-mklink /J "%USERPROFILE%\.agents\skills\token-frugal" "D:\path\to\agent-skills\skills\token-frugal"
+mklink /J "%USERPROFILE%\.agents\skills\java-style" "D:\path\to\agent-skills\skills\java-style"
 ```
 
 ## 包含的 skill
+
+| skill | 用途 |
+| --- | --- |
+| [token-frugal](skills/token-frugal/SKILL.md) | 降低 AI 会话的 token 消耗与费用 |
+| [java-style](skills/java-style/SKILL.md) | Java 编码风格与现代语法规范 |
+| [java-comments](skills/java-comments/SKILL.md) | Java 注释与 Javadoc 规范 |
 
 ### token-frugal — 降低 AI 会话的 token 消耗
 
@@ -42,6 +48,14 @@ python skills/token-frugal/scripts/session-cost.py ses_xxx --prices 0.15 0.6 0.0
 
 skill 里的数字来自一次真实会话的测量，不是估计：1,652 步、473M prompt tokens、命中率 96.5%、实付 $4.96（不缓存需 $72）。
 
+### java-style — Java 编码风格与现代语法规范
+
+按 JDK 8 / 11 / 17 / 21 分层：Stream、Optional、record、sealed、模式匹配、`java.time` 与不可变建模，以及解耦模块化、设计模式取舍、并发与线程池、事务与持久化、异常/日志/安全/测试的落地条款。入口 [`SKILL.md`](skills/java-style/SKILL.md)，细则在 `01-language.md` … `09-service-quality.md`。
+
+### java-comments — Java 注释与 Javadoc 规范
+
+类/接口/枚举注释、方法 Javadoc、字段与常量注释、行内注释与复杂逻辑说明，含正反例、评审检查清单、保密红线与详略规范。
+
 ## 许可
 
-MIT，见 [LICENSE](LICENSE)。
+MIT，见 [LICENSE](LICENSE)。各 skill 目录内另有其原始 LICENSE。
